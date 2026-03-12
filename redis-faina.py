@@ -193,7 +193,7 @@ def parse_entry(line, prefix_re):
 
 class StatCounter(object):
 
-    def __init__(self, prefix_delim=':', redis_version=2.6):
+    def __init__(self, prefix_delim=':', redis_version=2.6, top_n=8):
         self.line_count = 0
         self.skipped_lines = 0
         self.commands = defaultdict(int)
@@ -207,6 +207,7 @@ class StatCounter(object):
         self.last_entry = None
         self.prefix_delim = prefix_delim
         self.redis_version = redis_version
+        self.top_n = top_n
         self.prefix_re = prefix_re_24 if self.redis_version < 2.5 else prefix_re_26
 
     def _record_duration(self, entry):
@@ -275,7 +276,9 @@ class StatCounter(object):
             times_by_command[entry['command']] += time
         return self._top_n(times_by_command)
 
-    def _slowest_commands(self, times, n=8):
+    def _slowest_commands(self, times, n=None):
+        if n is None:
+            n = self.top_n
         sorted_times = self._get_or_sort_list(times)
         slowest_commands = reversed(sorted_times[-n:])
         printable_commands = [(str(time), self._reformat_entry(entry)) \
@@ -295,7 +298,9 @@ class StatCounter(object):
         for key in entry['keys']:
             self._record_key(key)
 
-    def _top_n(self, stat, n=8):
+    def _top_n(self, stat, n=None):
+        if n is None:
+            n = self.top_n
         sorted_items = sorted(stat.items(), key = lambda x: x[1], reverse = True)
         return sorted_items[:n]
 
@@ -359,7 +364,13 @@ if __name__ == '__main__':
         default = 2.6,
         help = "Version of the redis server being monitored",
         required = False)
+    parser.add_argument(
+        '--top-n',
+        type = int,
+        default = 8,
+        help = "Number of top entries to show in each stats section",
+        required = False)
     args = parser.parse_args()
-    counter = StatCounter(prefix_delim = args.prefix_delimiter, redis_version = args.redis_version)
+    counter = StatCounter(prefix_delim = args.prefix_delimiter, redis_version = args.redis_version, top_n = args.top_n)
     counter.process_input(args.input)
     counter.print_stats()
