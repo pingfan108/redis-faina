@@ -18,6 +18,9 @@ prefix_re_26 = re.compile(
 # Universal quoted argument extraction regex (correctly handles escaped quotes)
 args_re = re.compile(r'"((?:[^"\\]|\\.)*)"')
 
+# Redis hashtag extraction regex: matches {tag} at any position in the key
+hashtag_re = re.compile(r'\{([^}]+)\}')
+
 # Commands that have no key argument
 NO_KEY_COMMANDS = frozenset({
     'SELECT', 'AUTH', 'PING', 'INFO', 'CONFIG', 'CLUSTER',
@@ -196,6 +199,7 @@ class StatCounter(object):
         self.commands = defaultdict(int)
         self.keys = defaultdict(int)
         self.prefixes = defaultdict(int)
+        self.hashtags = defaultdict(int)
         self.times = []
         self._cached_sorts = {}
         self.start_ts = None
@@ -228,6 +232,10 @@ class StatCounter(object):
         parts = key.split(self.prefix_delim)
         if len(parts) > 1:
             self.prefixes[parts[0]] += 1
+        # Extract Redis cluster hashtag {tag} from the key
+        match = hashtag_re.search(key)
+        if match:
+            self.hashtags[match.group(1)] += 1
 
     @staticmethod
     def _reformat_entry(entry):
@@ -313,6 +321,7 @@ class StatCounter(object):
     def print_stats(self):
         self._pretty_print(self._general_stats(), 'Overall Stats')
         self._pretty_print(self._top_n(self.prefixes), 'Top Prefixes', percentages = True)
+        self._pretty_print(self._top_n(self.hashtags), 'Top Hashtags', percentages = True)
         self._pretty_print(self._top_n(self.keys), 'Top Keys', percentages = True)
         self._pretty_print(self._top_n(self.commands), 'Top Commands', percentages = True)
         self._pretty_print(self._time_stats(self.times), 'Command Time (microsecs)')
